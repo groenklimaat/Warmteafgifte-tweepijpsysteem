@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#e7c30d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="MijnApp">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="./icon-512.png">
+
+<meta charset="UTF-8">
+<title>Warmteafgifte — tweepijpsysteem</title>
+<style>
+    * { box-sizing: border-box; }
+    body {
+        font-family: "Times New Roman", Georgia, serif;
+        font-size: 12pt; color: #000; background: #fff;
+        margin: 0 auto; max-width: 210mm;
+        padding: 15mm 15mm 20mm 15mm; line-height: 1.45;
+    }
+    h1 { font-size: 16pt; margin: 0 0 4px 0; }
+    h2 { font-size: 13pt; margin: 22px 0 6px 0; border-bottom: 1px solid #000; padding-bottom: 2px; }
+    p { margin: 4px 0; }
+    ul { margin: 4px 0 8px 20px; padding: 0; }
+    hr { border: none; border-top: 1px solid #000; margin: 12px 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 10.5pt; margin: 6px 0; }
+    th, td { border: 1px solid #000; padding: 4px 6px; text-align: left; vertical-align: top; }
+    th { background: #eee; font-weight: bold; text-align: center; }
+    td.num { text-align: right; font-family: "Courier New", monospace; }
+    td.c { text-align: center; }
+    input, select {
+        font-family: "Courier New", monospace; font-size: 10.5pt;
+        border: 1px solid #000; padding: 2px 4px; background: #fff;
+    }
+    input[type="number"] { width: 90px; text-align: right; }
+    input[type="text"] { width: 100%; }
+    select { width: 100%; }
+    button {
+        font-family: "Times New Roman", serif; font-size: 11pt;
+        border: 1px solid #000; background: #eee;
+        padding: 6px 14px; cursor: pointer; margin-right: 6px;
+    }
+    button:hover { background: #ddd; }
+    .note { font-size: 10pt; font-style: italic; margin-top: 6px; }
+    .formula { font-family: "Courier New", monospace; font-size: 10pt; background: #f5f5f5; border-left: 2px solid #000; padding: 6px 10px; margin: 6px 0; }
+    .total-row td { font-weight: bold; background: #eee; }
+    @media print {
+        body { padding: 10mm; max-width: none; }
+        button { display: none; }
+        input, select { border: none; background: transparent; }
+    }
+</style>
+</head>
+<body>
+
+<h1>Warmteafgifte — tweepijpsysteem</h1>
+<p style="font-size:10pt;">Ontwerpberekening volgens EN 442</p>
+<hr>
+
+<!-- ===================== 1. SYSTEEMGEGEVENS ===================== -->
+<h2>1. Systeemgegevens</h2>
+<table>
+    <tr><th style="width:55%;">Parameter</th><th style="width:25%;">Waarde</th><th style="width:20%;">Eenheid</th></tr>
+    <tr><td>Aanvoertemperatuur (t₁)</td><td><input type="number" id="tSupply" value="70" step="1"></td><td class="c">°C</td></tr>
+    <tr><td>Retourtemperatuur (t₂)</td><td><input type="number" id="tReturn" value="60" step="1"></td><td class="c">°C</td></tr>
+    <tr><td>Ruimtetemperatuur</td><td><input type="number" id="tRoom" value="20" step="1"></td><td class="c">°C</td></tr>
+    <tr><td>Drukverlies over regelkraan (Δp)</td><td><input type="number" id="dpValve" value="10" step="1"></td><td class="c">kPa</td></tr>
+    <tr><td>Maximaal toelaatbaar leidingdrukverlies</td><td><input type="number" id="maxPipeLoss" value="150" step="10"></td><td class="c">Pa/m</td></tr>
+</table>
+
+<!-- ===================== 2. RADIATOREN ===================== -->
+<h2>2. Radiatoren</h2>
+<table>
+    <thead>
+        <tr>
+            <th>#</th><th>Ruimte</th><th>Type</th><th>H (mm)</th><th>L (mm)</th>
+            <th>Q<sub>n</sub> (W)</th><th>Vermogen (W)</th><th>K<sub>V</sub></th>
+            <th>ΔT<sub>rad</sub> (°C)</th><th>Ø leiding</th><th></th>
+        </tr>
+    </thead>
+    <tbody id="radBody"></tbody>
+    <tfoot>
+        <tr class="total-row">
+            <td colspan="6">Totaal</td>
+            <td class="num" id="totalPower">0</td>
+            <td colspan="4"></td>
+        </tr>
+    </tfoot>
+</table>
+<p>
+    <button id="btnAdd">+ Radiator toevoegen</button>
+    <button id="btnReset">Reset voorbeelden</button>
+</p>
+<p class="note">Type: 10 = vlakke plaat, 11/21/22/33 = geprofileerd. Q<sub>n</sub> = nominaal vermogen bij 75/65/20 °C.</p>
+
+<!-- ===================== 3. BEREKENEN ===================== -->
+<h2>3. Berekening</h2>
+<p>
+    <button id="btnCalc" style="font-weight:bold; font-size:12pt; padding:8px 24px;">Bereken</button>
+    <span id="status" class="note">Nog niet berekend.</span>
+</p>
+<div class="formula">
+    P<sub>werkelijk</sub> = Q<sub>n</sub> × ((t₁ + t₂)/2 − t<sub>ruimte</sub>) / 50)<sup>n</sup>  [EN 442]<br>
+    Q<sub>rad</sub> = P / (ρ × c × ΔT<sub>rad</sub>)  [m³/s]<br>
+    K<sub>V</sub> = Q<sub>rad</sub> / √(Δp<sub>kraan</sub>)  [m³/h bij 1 bar]
+</div>
+
+<!-- ===================== 4. RESULTATEN ===================== -->
+<h2>4. Resultaten</h2>
+<table>
+    <tr><th style="width:55%;">Resultaat</th><th style="width:25%;">Waarde</th><th style="width:20%;">Eenheid</th></tr>
+    <tr><td>Totaal geïnstalleerd vermogen</td><td class="num" id="resPower">—</td><td class="c">W</td></tr>
+    <tr><td>Totaal geïnstalleerd vermogen</td><td class="num" id="resPowerKw">—</td><td class="c">kW</td></tr>
+    <tr><td>Systeemdebiet (pomp)</td><td class="num" id="resFlow">—</td><td class="c">m³/h</td></tr>
+    <tr><td>Collector / verdeelbalk</td><td class="num" id="resCollector">—</td><td class="c">—</td></tr>
+    <tr><td>Leiding per radiator</td><td class="num" id="resRadPipe">—</td><td class="c">—</td></tr>
+</table>
+
+<!-- ===================== 5. PROJECT (optioneel) ===================== -->
+<h2>5. Projectgegevens</h2>
+<table>
+    <tr><th style="width:35%;">Veld</th><th>Waarde</th></tr>
+    <tr><td>Project / dossier</td><td><input type="text" id="projRef" placeholder="bv. VERB-2026-014"></td></tr>
+    <tr><td>Opdrachtgever</td><td><input type="text" id="projClient"></td></tr>
+    <tr><td>Adres werf</td><td><input type="text" id="projAddress"></td></tr>
+    <tr><td>Installateur / ontwerper</td><td><input type="text" id="projEngineer"></td></tr>
+    <tr><td>Datum</td><td><input type="text" id="projDate" placeholder="dd/mm/jjjj"></td></tr>
+    <tr><td>Documentstatus</td><td>
+        <select id="projStatus">
+            <option>VOORONTWERP</option>
+            <option>TER GOEDKEURING</option>
+            <option>DEFINITIEF</option>
+        </select>
+    </td></tr>
+</table>
+
+<p style="margin-top:24px;">
+    <button onclick="window.print()">Afdrukken / opslaan als PDF</button>
+</p>
+
+<script>
+// ---------- EN 442 data ----------
+const RAD_DATA = {
+    "10": { 200:{Qn:100,n:1.3},300:{Qn:375,n:1.2945},400:{Qn:476,n:1.3013},500:{Qn:572,n:1.3081},600:{Qn:665,n:1.3149},700:{Qn:753,n:1.321},900:{Qn:922,n:1.3331} },
+    "11": { 200:{Qn:200,n:1.3},300:{Qn:533,n:1.2583},400:{Qn:683,n:1.2772},500:{Qn:831,n:1.2962},600:{Qn:979,n:1.3151},700:{Qn:1129,n:1.3198},900:{Qn:1432,n:1.3291} },
+    "20": { 200:{Qn:300,n:1.3},300:{Qn:627,n:1.296},400:{Qn:784,n:1.3027},500:{Qn:934,n:1.3093},600:{Qn:1080,n:1.316},700:{Qn:1222,n:1.3259},900:{Qn:1502,n:1.3456} },
+    "21": { 200:{Qn:400,n:1.3},300:{Qn:748,n:1.3135},400:{Qn:937,n:1.3259},500:{Qn:1118,n:1.3384},600:{Qn:1294,n:1.3508},700:{Qn:1466,n:1.3602},900:{Qn:1802,n:1.3791} },
+    "22": { 200:{Qn:500,n:1.3},300:{Qn:950,n:1.2985},400:{Qn:1204,n:1.3122},500:{Qn:1447,n:1.326},600:{Qn:1680,n:1.3397},700:{Qn:1905,n:1.3468},900:{Qn:2335,n:1.3609} },
+    "33": { 200:{Qn:600,n:1.3},300:{Qn:1331,n:1.319},400:{Qn:1716,n:1.3273},500:{Qn:2075,n:1.3357},600:{Qn:2411,n:1.344},700:{Qn:2724,n:1.3529},900:{Qn:3286,n:1.3708} }
+};
+const REF_LEN = 1000;
+const TYPES = ["10","11","20","21","22","33"];
+const ROOMS = [
+    "Living","Eetkamer","Keuken","Gang","Hal","Traphal",
+    "Slaapkamer 1","Slaapkamer 2","Slaapkamer 3","Slaapkamer 4",
+    "Badkamer","WC","Zolder","Berging","Garage","Kelder",
+    "Wasplaats","Kantoor","Overige"
+];
+
+function getQnAndN(type, height, length) {
+    let spec = RAD_DATA[type]?.[height];
+    if(!spec) spec = RAD_DATA[type]?.[600] || {Qn:1000,n:1.33};
+    return { Qn: Math.round(spec.Qn * (length/REF_LEN)), n: spec.n };
+}
+function correctPower(Qn, n, tSupply, tReturn, tRoom) {
+    let dt = (tSupply + tReturn)/2 - tRoom;
+    if(dt <= 0) return 0;
+    return Qn * Math.pow(dt/50, n);
+}
+function kvFromPower(powerW, dT, dp_kPa) {
+    if(powerW <= 0 || dT <= 0 || dp_kPa <= 0) return "—";
+    let flow = (powerW / (4186 * dT)) * 3.6;
+    return (flow / Math.sqrt(dp_kPa/100)).toFixed(3);
+}
+function pipeRad() { return "16 mm"; }
+function collectorSize(totalFlow_m3h) {
+    if(totalFlow_m3h <= 1.5) return '1″ (25 mm)';
+    if(totalFlow_m3h <= 2.5) return '1¼″ (32 mm)';
+    if(totalFlow_m3h <= 4.0) return '1½″ (40 mm)';
+    return '2″ (50 mm)';
+}
+
+let radiators = [];
+let nextId = 1;
+
+function addRadiator(prefill) {
+    radiators.push(prefill || {
+        id: nextId++, room: "Living", type: "22", height: 600, length: 1600,
+        customPower: null, currentPower: 0, kv: "—", dT: 0, pipe: "16 mm"
+    });
+    render();
+}
+function resetDefault() {
+    radiators = []; nextId = 1;
+    addRadiator({id:nextId++, room:"Living", type:"22", height:600, length:1600, customPower:null, currentPower:0});
+    addRadiator({id:nextId++, room:"Badkamer", type:"21", height:500, length:1200, customPower:null, currentPower:0});
+    addRadiator({id:nextId++, room:"Slaapkamer 1", type:"11", height:450, length:1000, customPower:null, currentPower:0});
+    addRadiator({id:nextId++, room:"Zolder", type:"33", height:600, length:900, customPower:null, currentPower:0});
+    document.getElementById("status").innerText = "Voorbeelden geladen — klik op Bereken.";
+}
+
+function render() {
+    let tb = document.getElementById("radBody");
+    tb.innerHTML = "";
+    radiators.forEach((r, i) => {
+        let tr = document.createElement("tr");
+        let roomOpts = ROOMS.map(rm => `<option ${r.room===rm?"selected":""}>${rm}</option>`).join("");
+        let typeOpts = TYPES.map(t => `<option ${r.type===t?"selected":""}>${t}</option>`).join("");
+        tr.innerHTML = `
+            <td class="c">${i+1}</td>
+            <td><select data-i="${i}" data-k="room" style="width:110px">${roomOpts}</select></td>
+            <td><select data-i="${i}" data-k="type" style="width:55px">${typeOpts}</select></td>
+            <td><input type="number" data-i="${i}" data-k="height" value="${r.height}" style="width:60px"></td>
+            <td><input type="number" data-i="${i}" data-k="length" value="${r.length}" style="width:70px"></td>
+            <td class="num">${getQnAndN(r.type, r.height, r.length).Qn}</td>
+            <td><input type="number" data-i="${i}" data-k="customPower" value="${r.customPower!==null?r.customPower:''}" placeholder="auto" style="width:70px"></td>
+            <td class="num">${r.kv}</td>
+            <td class="num">${r.dT ? r.dT.toFixed(1) : "—"}</td>
+            <td class="c">${r.pipe}</td>
+            <td class="c"><button data-del="${i}" style="padding:1px 6px;font-size:9pt;">×</button></td>
+        `;
+        tb.appendChild(tr);
+    });
+    tb.querySelectorAll("select, input").forEach(el => {
+        el.addEventListener("change", () => {
+            let i = +el.dataset.i, k = el.dataset.k;
+            let v = el.value;
+            if(k === "height" || k === "length") v = parseInt(v) || 0;
+            if(k === "customPower") v = (v === "" ? null : parseFloat(v));
+            radiators[i][k] = v;
+            document.getElementById("status").innerText = "Gewijzigd — klik op Bereken.";
+            render();
+        });
+    });
+    tb.querySelectorAll("button[data-del]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            radiators.splice(+btn.dataset.del, 1);
+            document.getElementById("status").innerText = "Gewijzigd — klik op Bereken.";
+            render();
+        });
+    });
+    let tot = radiators.reduce((s,r)=>s+(r.currentPower||0),0);
+    document.getElementById("totalPower").innerText = tot || 0;
+}
+
+function calculate() {
+    let t1 = parseFloat(document.getElementById("tSupply").value) || 70;
+    let t2 = parseFloat(document.getElementById("tReturn").value) || 60;
+    let tR = parseFloat(document.getElementById("tRoom").value) || 20;
+    let dp = parseFloat(document.getElementById("dpValve").value) || 10;
+    let dT = Math.max(1, t1 - t2);
+
+    let totalPower = 0;
+    radiators.forEach(r => {
+        let {Qn, n} = getQnAndN(r.type, r.height, r.length);
+        let p = (r.customPower !== null && !isNaN(r.customPower))
+            ? r.customPower
+            : Math.round(correctPower(Qn, n, t1, t2, tR));
+        r.currentPower = p;
+        r.dT = dT;
+        r.kv = kvFromPower(p, dT, dp);
+        r.pipe = pipeRad();
+        totalPower += p;
+    });
+
+    let flow_m3h = (totalPower / 1000) / (4.186 * dT) * 3.6;
+    let collector = collectorSize(flow_m3h);
+
+    document.getElementById("resPower").innerText = Math.round(totalPower);
+    document.getElementById("resPowerKw").innerText = (totalPower / 1000).toFixed(2);
+    document.getElementById("resFlow").innerText = flow_m3h.toFixed(2);
+    document.getElementById("resCollector").innerText = collector;
+    document.getElementById("resRadPipe").innerText = pipeRad();
+    document.getElementById("status").innerText = "Berekend om " + new Date().toLocaleTimeString("nl-BE") + ".";
+
+    render();
+}
+
+document.getElementById("btnAdd").addEventListener("click", () => { addRadiator(); document.getElementById("status").innerText = "Gewijzigd — klik op Bereken."; });
+document.getElementById("btnReset").addEventListener("click", resetDefault);
+document.getElementById("btnCalc").addEventListener("click", calculate);
+
+resetDefault();
+</script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(reg => console.log('SW:', reg.scope))
+        .catch(err => console.error('SW error:', err));
+    });
+  }
+</script>
+</body>
+</html>
